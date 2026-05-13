@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>🏥 نظام المستشفى الاحترافي</title>
+
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1E5F8A">
+
+<!-- Supabase v2 -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<style>
+/* ====== نفس تصميمك بدون تغيير ====== */
+
+*{box-sizing:border-box;}
+
+body{
+font-family:'Segoe UI',Tahoma,sans-serif;
+background:#f0f4f8;
+padding:15px;
+direction:rtl;
+margin:0;
+}
+
+.container{max-width:900px;margin:auto;}
+
+h1{text-align:center;color:#1E5F8A;}
+
+.card{
+background:white;
+padding:15px;
+margin:12px 0;
+border-radius:12px;
+box-shadow:0 2px 8px rgba(0,0,0,0.08);
+}
+
+input,select,textarea{
+width:100%;
+padding:10px;
+margin:6px 0;
+border-radius:8px;
+border:1px solid #ccc;
+font-size:15px;
+}
+
+button{
+width:100%;
+padding:12px;
+border:none;
+border-radius:8px;
+cursor:pointer;
+color:white;
+font-weight:bold;
+margin-top:5px;
+}
+
+.add-btn{background:#28a745;}
+.delete-btn{background:#dc3545;}
+.edit-btn{background:#fd7e14;}
+.view-btn{background:#007bff;}
+.print-btn{background:#6c757d;}
+
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;}
+
+.stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:15px;}
+
+.stat-box{
+background:white;
+padding:15px;
+border-radius:12px;
+text-align:center;
+box-shadow:0 2px 8px rgba(0,0,0,0.08);
+}
+
+.search-box{position:sticky;top:0;background:#f0f4f8;padding:10px 0;}
+
+#loading{text-align:center;padding:20px;display:none;}
+
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+<h1>🏥 نظام المستشفى الاحترافي</h1>
+
+<!-- Stats -->
+<div class="stats">
+<div class="stat-box"><h2 id="patientsCount">0</h2><div>المرضى</div></div>
+<div class="stat-box"><h2 id="visitsCount">0</h2><div>الزيارات</div></div>
+<div class="stat-box"><h2 id="appointmentsCount">0</h2><div>المواعيد</div></div>
+</div>
+
+<!-- Form -->
+<div class="card">
+<h3>➕ إضافة مريض</h3>
+
+<form id="patientForm">
+
+<div class="grid-2">
+<input id="name" placeholder="اسم المريض">
+<input id="age" type="number" placeholder="العمر">
+</div>
+
+<div class="grid-3">
+<select id="gender">
+<option value="">الجنس</option>
+<option value="ذكر">ذكر</option>
+<option value="أنثى">أنثى</option>
+</select>
+
+<input id="phone" placeholder="الهاتف">
+<input id="blood_type" placeholder="فصيلة الدم">
+</div>
+
+<input id="address" placeholder="العنوان">
+<input id="diagnosis" placeholder="التشخيص">
+
+<textarea id="notes" placeholder="ملاحظات"></textarea>
+
+<button type="button" class="add-btn" onclick="addPatient()">
+إضافة
+</button>
+
+</form>
+</div>
+
+<div id="loading">جاري التحميل...</div>
+
+<div id="patients"></div>
+
+</div>
+
+<script>
+
+/* =========================
+SUPABASE (FIXED + CLEAN)
+========================= */
+
+const SUPABASE_URL = "https://umglydjnxctemxahkvva.supabase.co";
+
+const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVtZ2x5ZGpueGN0ZW14YWhrdnZhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgyMTcwMjUsImV4cCI6MjA5Mzc5MzAyNX0.u_fmhVpmt1hqGutX3V-QP7Gx0PrA1iZz1Yle6bPCvfI";
+
+/* IMPORTANT FIX */
+const client = window.supabase.createClient(
+  SUPABASE_URL,
+  SUPABASE_KEY
+);
+
+console.log("✅ Supabase Connected");
+
+let allPatients = [];
+
+/* =========================
+ADD PATIENT
+========================= */
+
+async function addPatient(){
+
+const name = document.getElementById("name").value;
+const age = document.getElementById("age").value;
+const diagnosis = document.getElementById("diagnosis").value;
+
+if(!name || !age || !diagnosis){
+alert("أدخل البيانات المطلوبة");
+return;
+}
+
+const { error } = await client.from("patients").insert([{
+name,
+age: parseInt(age),
+gender: document.getElementById("gender").value,
+phone: document.getElementById("phone").value,
+blood_type: document.getElementById("blood_type").value,
+address: document.getElementById("address").value,
+diagnosis,
+notes: document.getElementById("notes").value
+}]);
+
+if(error){
+alert(error.message);
+return;
+}
+
+alert("تمت الإضافة ✅");
+document.getElementById("patientForm").reset();
+loadPatients();
+}
+
+/* =========================
+LOAD PATIENTS
+========================= */
+
+async function loadPatients(){
+
+const { data, error } = await client
+.from("patients")
+.select("*")
+.order("id",{ascending:false});
+
+if(error){
+alert(error.message);
+return;
+}
+
+allPatients = data;
+renderPatients(data);
+
+document.getElementById("patientsCount").innerText = data.length;
+}
+
+/* =========================
+RENDER
+========================= */
+
+function renderPatients(data){
+
+const box = document.getElementById("patients");
+box.innerHTML = "";
+
+data.forEach(p => {
+
+box.innerHTML += `
+<div class="card">
+
+<h3>👤 ${p.name}</h3>
+
+<div>العمر: ${p.age}</div>
+<div>الهاتف: ${p.phone || "-"}</div>
+<div>التشخيص: ${p.diagnosis}</div>
+
+<button class="delete-btn" onclick="deletePatient(${p.id})">
+حذف
+</button>
+
+</div>
+`;
+});
+}
+
+/* =========================
+DELETE
+========================= */
+
+async function deletePatient(id){
+
+if(!confirm("حذف المريض؟")) return;
+
+const { error } = await client
+.from("patients")
+.delete()
+.eq("id", id);
+
+if(error){
+alert(error.message);
+return;
+}
+
+loadPatients();
+}
+
+/* =========================
+INIT
+========================= */
+
+loadPatients();
+
+</script>
+
+</body>
+</html>
